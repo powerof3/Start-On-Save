@@ -4,7 +4,7 @@
 std::string specificSave;
 bool useSpecificSave;
 
-std::uint32_t type;
+std::int32_t type;
 
 std::string charName;
 bool useCharName;
@@ -14,6 +14,8 @@ bool disableMissingESPs;
 int KEY;
 bool skipLoading = false;
 
+bool loadNewGame;
+
 
 void LoadSettings()
 {
@@ -21,7 +23,6 @@ void LoadSettings()
 
 	CSimpleIniA ini;
 	ini.SetUnicode();
-	ini.SetMultiKey();
 
 	ini.LoadFile(path);
 
@@ -34,21 +35,24 @@ void LoadSettings()
 
 	if (!charName.empty()) {
 		std::transform(charName.begin(), charName.end(), charName.begin(),
-			[](char c) { return static_cast<char>(std::tolower(c)); });
+			[](const char c) { return static_cast<char>(std::tolower(c)); });
 
 		useCharName = true;
 	} else {
 		useCharName = false;
 	}
 
-	type = SKSE::STRING::to_num<std::uint32_t>(ini.GetValue("Settings", "Save Type", "0"));
-	ini.SetValue("Settings", "Save Type", std::to_string(type).c_str(), ";Type of save to auto load\n;0 - Last save, 1 - Last quicksave, 2 - Last autosave, 3 - Last manual save.", true);
+	type = SKSE::STRING::to_num<std::int32_t>(ini.GetValue("Settings", "Save Type", "0"));
+	ini.SetValue("Settings", "Save Type", std::to_string(type).c_str(), ";Type of save to auto load\n;0 - Last save, 1 - Last quicksave, 2 - Last autosave, 3 - Last manual save.\n;4 - First save, 5 - First quicksave, 6 - First autosave, 7 - First manual save.", true);
 
 	KEY = SKSE::STRING::to_num<int>(ini.GetValue("Settings", "Skip AutoLoad", "16"));
 	ini.SetValue("Settings", "Skip AutoLoad", std::to_string(KEY).c_str(), ";Skip autoload by pressing this key (default: SHIFT) before the main menu loads.\n;List of keycodes - https://www.indigorose.com/webhelp/ams/Program_Reference/Misc/Virtual_Key_Codes.htm", true);
 
+	loadNewGame = ini.GetBoolValue("Settings", "Start New Game", true);
+	ini.SetBoolValue("Settings", "Start New Game", loadNewGame, ";Automatically start a new game if there are no saves.", true);
+
 	disableMissingESPs = ini.GetBoolValue("Settings", "Disable Missing Content Warning", false);
-	ini.SetBoolValue("Settings", "Disable Missing Content Warning", disableMissingESPs, ";Disables warning messagebox when loading saves with missing mods", true);
+	ini.SetBoolValue("Settings", "Disable Missing Content Warning", disableMissingESPs, ";Disables warning messagebox when loading saves with missing mods.", true);
 
 	ini.SaveFile(path);
 }
@@ -62,6 +66,14 @@ void CheckKeyPress()
 }
 
 
+void StartNewGame()
+{
+	using func_t = decltype(&StartNewGame);
+	REL::Relocation<func_t> func{ REL::ID(51246) };
+	return func();
+}
+
+
 void OnInit(SKSE::MessagingInterface::Message* a_msg)
 {
 	using namespace SKSE::STRING;
@@ -69,21 +81,24 @@ void OnInit(SKSE::MessagingInterface::Message* a_msg)
 	switch (a_msg->type) {
 	case SKSE::MessagingInterface::kInputLoaded:
 		{
-			CheckKeyPress();  //check for first time		
+			CheckKeyPress();  //check for first time
 		}
 		break;
 	case SKSE::MessagingInterface::kDataLoaded:
 		{
+			CheckKeyPress();  //check again
+			if (skipLoading) {
+				return;
+			}
+
 			if (auto manager = RE::BGSSaveLoadManager::GetSingleton(); manager) {
 				manager->PopulateSaveList();
 
 				const auto list = manager->saveGameList;
 				if (list.empty()) {
-					return;
-				}
-
-				CheckKeyPress(); //check again
-				if (skipLoading) {
+					if (loadNewGame && GetModuleHandle("SmoothCam") == nullptr) {
+						StartNewGame();
+					}
 					return;
 				}
 
@@ -99,16 +114,30 @@ void OnInit(SKSE::MessagingInterface::Message* a_msg)
 				}
 
 				if (!lastGame) {
-					for (auto i = list.size(); i-- > 0;) {	// the most recent save is stored at the back
-						const auto save = manager->saveGameList[i];
-						if (save) {
-							std::string name{ save->fileName.c_str() };
-							std::string playerName{ save->playerName.c_str() };
-
-							if (type == 0 || type == 1 && name.find("Quicksave") != std::string::npos || type == 2 && name.find("Autosave") != std::string::npos || type == 3 && name.find("Save") != std::string::npos) {
-								if (!useCharName || !playerName.empty() && insenstiveStringFind(playerName, charName)) {
-									lastGame = save;
-									break;
+					if (type < 4) {
+						for (auto i = list.size(); i-- > 0;) {	// the most recent save is stored at the back
+							const auto save = manager->saveGameList[i];
+							if (save) {
+								std::string name{ save->fileName.c_str() };
+								if (type == 0 || type == 1 && name.find("Quicksave") != std::string::npos || type == 2 && name.find("Autosave") != std::string::npos || type == 3 && name.find("Save") != std::string::npos) {
+									std::string playerName{ save->playerName.c_str() };
+									if (!useCharName || !playerName.empty() && insenstiveStringFind(playerName, charName)) {
+										lastGame = save;
+										break;
+									}
+								}
+							}
+						}
+					} else {
+						for (auto& save : list) {
+							if (save) {
+								std::string name{ save->fileName.c_str() };
+								if (type == 4 || type == 5 && name.find("Quicksave") != std::string::npos || type == 6 && name.find("Autosave") != std::string::npos || type == 7 && name.find("Save") != std::string::npos) {
+									std::string playerName{ save->playerName.c_str() };
+									if (!useCharName || !playerName.empty() && insenstiveStringFind(playerName, charName)) {
+										lastGame = save;
+										break;
+									}
 								}
 							}
 						}

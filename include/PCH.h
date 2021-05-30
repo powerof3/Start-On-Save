@@ -7,6 +7,7 @@
 #include <spdlog/sinks/basic_file_sink.h>
 #include <SimpleIni.h>
 #include <winuser.rh>
+#include <Xinput.h>
 
 #ifndef NDEBUG
 #include <spdlog/sinks/msvc_sink.h>
