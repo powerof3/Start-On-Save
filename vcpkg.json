@@ -1,0 +1,13 @@
+{
+  "name": "startonsave",
+  "version-string": "2.2.0",
+  "description": "",
+  "homepage": "",
+  "license": "MIT",
+  "dependencies": [
+    "boost-atomic",
+    "boost-stl-interfaces",
+    "span-lite",
+    "spdlog"
+  ]
+}
