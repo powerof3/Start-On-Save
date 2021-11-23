@@ -40,10 +40,10 @@ namespace Setting
 			useCharName = false;
 		}
 
-		type = stl::to_num<std::int32_t>(ini.GetValue("Settings", "Save Type", "0"));
+		type = string::lexical_cast<std::int32_t>(ini.GetValue("Settings", "Save Type", "0"));
 		ini.SetValue("Settings", "Save Type", std::to_string(type).c_str(), ";Type of save to auto load\n;0 - Last save, 1 - Last quicksave, 2 - Last autosave, 3 - Last manual save.\n;4 - First save, 5 - First quicksave, 6 - First autosave, 7 - First manual save.", true);
 
-		KEY = stl::to_num<int>(ini.GetValue("Settings", "Skip AutoLoad", "16"));
+		KEY = string::lexical_cast<int>(ini.GetValue("Settings", "Skip AutoLoad", "16"));
 		ini.SetValue("Settings", "Skip AutoLoad", std::to_string(KEY).c_str(), ";Skip autoload by pressing this key (default: SHIFT) before the main menu loads.\n;List of keycodes - https://www.indigorose.com/webhelp/ams/Program_Reference/Misc/Virtual_Key_Codes.htm", true);
 
 		loadNewGame = ini.GetBoolValue("Settings", "Start New Game", true);

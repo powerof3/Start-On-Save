@@ -5,9 +5,8 @@
   "homepage": "",
   "license": "MIT",
   "dependencies": [
-    "boost-atomic",
     "boost-stl-interfaces",
-    "span-lite",
-    "spdlog"
+    "spdlog",
+    "simpleini"
   ]
 }
