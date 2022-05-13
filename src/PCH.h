@@ -3,9 +3,6 @@
 #include "RE/Skyrim.h"
 #include "SKSE/SKSE.h"
 
-#include <windows.h> 
-#include <SimpleIni.h>
-
 #pragma warning(disable: 4100)
 
 #pragma warning(push)
@@ -14,6 +11,8 @@
 #else
 #	include <spdlog/sinks/msvc_sink.h>
 #endif
+#include <SimpleIni.h>
+#include <xbyak/xbyak.h>
 #pragma warning(pop)
 
 namespace logger = SKSE::log;
@@ -23,9 +22,7 @@ using namespace std::literals;
 
 namespace stl
 {
-	using SKSE::stl::adjust_pointer;
-	using SKSE::stl::report_and_fail;
-	using SKSE::stl::to_underlying;
+	using namespace SKSE::stl;
 }
 
 #define DLLEXPORT __declspec(dllexport)

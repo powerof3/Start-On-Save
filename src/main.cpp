@@ -32,7 +32,7 @@ namespace Setting
 		ini.SetValue("Settings", "Character Name", charName.c_str(), ";Auto load saves belonging to this character only. If blank, all saves will be considered.", true);
 
 		if (!charName.empty()) {
-			std::transform(charName.begin(), charName.end(), charName.begin(),
+			std::ranges::transform(charName, charName.begin(),
 				[](const char c) { return static_cast<char>(std::tolower(c)); });
 
 			useCharName = true;
@@ -52,20 +52,12 @@ namespace Setting
 		disableMissingESPs = ini.GetBoolValue("Settings", "Disable Missing Content Warning", false);
 		ini.SetBoolValue("Settings", "Disable Missing Content Warning", disableMissingESPs, ";Disables warning messagebox when loading saves with missing mods.", true);
 
-		ini.SaveFile(path);
+		(void)ini.SaveFile(path);
 	}
 }
 
 namespace UTIL
 {
-	bool insenstiveStringFind(std::string& a_str1, std::string_view a_str2, size_t pos = 0)
-	{
-		std::transform(a_str1.begin(), a_str1.end(), a_str1.begin(),
-			[](char c) { return static_cast<char>(std::tolower(c)); });
-
-		return a_str1.find(a_str2, pos) != std::string::npos;
-	}
-
 	void CheckKeyPress()
 	{
 		if (GetAsyncKeyState(Setting::KEY) & 0x8000) {
@@ -73,28 +65,133 @@ namespace UTIL
 		}
 	}
 
-	bool GetValidSave(const std::string& a_name, std::uint32_t a_offset = 0)
+	bool GetValidSave(const std::string& a_name, std::int32_t a_offset = 0)
 	{
-		return Setting::type == (0 + a_offset) || Setting::type == (1 + a_offset) && a_name.find("Quicksave") != std::string::npos || Setting::type == (2 + a_offset) && a_name.find("Autosave") != std::string::npos || Setting::type == (3 + a_offset) && a_name.find("Save") != std::string::npos;
+		return Setting::type == (0 + a_offset) ||
+		       Setting::type == (1 + a_offset) && a_name.contains("Quicksave") ||
+		       Setting::type == (2 + a_offset) && a_name.contains("Autosave") ||
+		       Setting::type == (3 + a_offset) && a_name.contains("Save");
 	}
 }
 
 namespace Game
 {
-	void PopulateSaveList(RE::BGSSaveLoadManager* a_manager)
+	void BuildSaveGameList(RE::BGSSaveLoadManager* a_manager)
 	{
-		using func_t = decltype(&PopulateSaveList);
-		REL::Relocation<func_t> func{ REL::ID(34850) };
+		using func_t = decltype(&BuildSaveGameList);
+		REL::Relocation<func_t> func{ RELOCATION_ID(34850, 35760) };
 		return func(a_manager);
 	}
 
-	void StartNewGame()
+	void DoBeforeNewOrLoad()
 	{
-		using func_t = decltype(&StartNewGame);
-		REL::Relocation<func_t> func{ REL::ID(51246) };
+		using func_t = decltype(&DoBeforeNewOrLoad);
+		REL::Relocation<func_t> func{ RELOCATION_ID(35596, 36604) };
 		return func();
 	}
 }
+
+class MenuManager : public RE::BSTEventSink<RE::MenuOpenCloseEvent>
+{
+public:
+	static MenuManager* GetSingleton()
+	{
+		static MenuManager singleton;
+		return &singleton;
+	}
+
+	static void Register()
+	{
+		if (auto menuSrc = RE::UI::GetSingleton(); menuSrc) {
+			menuSrc->AddEventSink(GetSingleton());
+		}
+	}
+
+	static void Unregister()
+	{
+		if (auto menuSrc = RE::UI::GetSingleton(); menuSrc) {
+			menuSrc->RemoveEventSink(GetSingleton());
+		}
+	}
+
+protected:
+	using EventResult = RE::BSEventNotifyControl;
+
+	EventResult ProcessEvent(const RE::MenuOpenCloseEvent* a_event, RE::BSTEventSource<RE::MenuOpenCloseEvent>*) override
+	{
+		if (!a_event) {
+			return EventResult::kContinue;
+		}
+
+		const auto intfcStr = RE::InterfaceStrings::GetSingleton();
+		if (a_event->menuName == intfcStr->loadWaitSpinner) {
+			if (const auto manager = RE::BGSSaveLoadManager::GetSingleton(); manager) {
+				Game::BuildSaveGameList(manager);
+
+				const auto list = manager->saveGameList;
+				if (list.empty()) {
+					Unregister();
+					return EventResult::kContinue;
+				}
+
+				RE::BGSSaveLoadFileEntry* lastGame = nullptr;
+
+				if (Setting::useSpecificSave) {
+					if (const auto result = std::ranges::find_if(list, [&](const auto& save) {
+							return Setting::specificSave == save->fileName.c_str();
+						});
+						result != list.end()) {
+						lastGame = *result;
+					}
+				}
+
+				if (!lastGame) {
+					if (Setting::type < 4) {
+						for (auto i = list.size(); i-- > 0;) {  // the most recent save is stored at the back
+							const auto save = manager->saveGameList[i];
+							if (save && UTIL::GetValidSave(save->fileName.c_str())) {
+								std::string playerName{ save->playerName.c_str() };
+								if (!Setting::useCharName || !playerName.empty() && string::iequals(playerName, Setting::charName)) {
+									lastGame = save;
+									break;
+								}
+							}
+						}
+					}
+				} else {
+					for (auto& save : list) {
+						if (save && UTIL::GetValidSave(save->fileName.c_str(), 4)) {
+							std::string playerName{ save->playerName.c_str() };
+							if (!Setting::useCharName || !playerName.empty() && string::iequals(playerName, Setting::charName)) {
+								lastGame = save;
+								break;
+							}
+						}
+					}
+				}
+
+				if (lastGame) {
+					Game::DoBeforeNewOrLoad();
+				    manager->Load(lastGame->fileName.c_str(), Setting::disableMissingESPs);
+				}
+			}
+
+			Unregister();
+		}
+
+		return EventResult::kContinue;
+	}
+
+private:
+	MenuManager() = default;
+	MenuManager(const MenuManager&) = delete;
+	MenuManager(MenuManager&&) = delete;
+
+	~MenuManager() override = default;
+
+	MenuManager& operator=(const MenuManager&) = delete;
+	MenuManager& operator=(MenuManager&&) = delete;
+};
 
 void OnInit(SKSE::MessagingInterface::Message* a_msg)
 {
@@ -110,58 +207,7 @@ void OnInit(SKSE::MessagingInterface::Message* a_msg)
 			if (Setting::skipLoading) {
 				return;
 			}
-
-			if (auto manager = RE::BGSSaveLoadManager::GetSingleton(); manager) {
-				Game::PopulateSaveList(manager);
-
-				const auto list = manager->saveGameList;
-				if (list.empty()) {
-					/* if (Setting::loadNewGame) {
-						Game::StartNewGame();
-					}*/
-					return;
-				}
-
-				RE::BGSSaveLoadFileEntry* lastGame = nullptr;
-
-				if (Setting::useSpecificSave) {
-					if (const auto result = std::find_if(list.begin(), list.end(), [&](const auto& save) {
-							return Setting::specificSave == save->fileName.c_str();
-						});
-						result != list.end()) {
-						lastGame = *result;
-					}
-				}
-
-				if (!lastGame) {
-					if (Setting::type < 4) {
-						for (auto i = list.size(); i-- > 0;) {  // the most recent save is stored at the back
-							const auto save = manager->saveGameList[i];
-							if (save && UTIL::GetValidSave(save->fileName.c_str())) {
-								std::string playerName{ save->playerName.c_str() };
-								if (!Setting::useCharName || !playerName.empty() && UTIL::insenstiveStringFind(playerName, Setting::charName)) {
-									lastGame = save;
-									break;
-								}
-							}
-						}
-					}
-				} else {
-					for (auto& save : list) {
-						if (save && UTIL::GetValidSave(save->fileName.c_str(), 4)) {
-							std::string playerName{ save->playerName.c_str() };
-							if (!Setting::useCharName || !playerName.empty() && UTIL::insenstiveStringFind(playerName, Setting::charName)) {
-								lastGame = save;
-								break;
-							}
-						}
-					}
-				}
-
-				if (lastGame) {
-					manager->Load(lastGame->fileName.c_str(), Setting::disableMissingESPs);
-				}
-			}
+			MenuManager::Register();
 		}
 		break;
 	case SKSE::MessagingInterface::kPostLoadGame:
@@ -173,38 +219,22 @@ void OnInit(SKSE::MessagingInterface::Message* a_msg)
 	}
 }
 
+#ifdef SKYRIM_AE
+extern "C" DLLEXPORT constinit auto SKSEPlugin_Version = []() {
+	SKSE::PluginVersionData v;
+	v.PluginVersion(Version::MAJOR);
+	v.PluginName("Illusion Spells Affect Player");
+	v.AuthorName("powerofthree");
+	v.UsesAddressLibrary(true);
+	v.CompatibleVersions({ SKSE::RUNTIME_LATEST });
 
+	return v;
+}();
+#else
 extern "C" DLLEXPORT bool SKSEAPI SKSEPlugin_Query(const SKSE::QueryInterface* a_skse, SKSE::PluginInfo* a_info)
 {
-#ifndef NDEBUG
-	auto sink = std::make_shared<spdlog::sinks::msvc_sink_mt>();
-#else
-	auto path = logger::log_directory();
-	if (!path) {
-		return false;
-	}
-
-	*path /= "po3_StartOnSave.log "sv;
-
-	auto sink = std::make_shared<spdlog::sinks::basic_file_sink_mt>(path->string(), true);
-#endif
-
-	auto log = std::make_shared<spdlog::logger>("global log"s, std::move(sink));
-
-#ifndef NDEBUG
-	log->set_level(spdlog::level::trace);
-#else
-	log->set_level(spdlog::level::info);
-	log->flush_on(spdlog::level::info);
-#endif
-
-	spdlog::set_default_logger(std::move(log));
-	spdlog::set_pattern("[%H:%M:%S] [%l] %v"s);
-
-	logger::info(FMT_STRING("{} v{}"), Version::PROJECT, Version::NAME);
-
 	a_info->infoVersion = SKSE::PluginInfo::kVersion;
-	a_info->name = Version::PROJECT.data();
+	a_info->name = "Illusion Spells Affect Player";
 	a_info->version = Version::MAJOR;
 
 	if (a_skse->IsEditor()) {
@@ -220,19 +250,40 @@ extern "C" DLLEXPORT bool SKSEAPI SKSEPlugin_Query(const SKSE::QueryInterface* a
 
 	return true;
 }
+#endif
+
+void InitializeLog()
+{
+	auto path = logger::log_directory();
+	if (!path) {
+		stl::report_and_fail("Failed to find standard logging directory"sv);
+	}
+
+	*path /= fmt::format(FMT_STRING("{}.log"), Version::PROJECT);
+	auto sink = std::make_shared<spdlog::sinks::basic_file_sink_mt>(path->string(), true);
+
+	auto log = std::make_shared<spdlog::logger>("global log"s, std::move(sink));
+
+	log->set_level(spdlog::level::info);
+	log->flush_on(spdlog::level::info);
+
+	spdlog::set_default_logger(std::move(log));
+	spdlog::set_pattern("[%l] %v"s);
+
+	logger::info(FMT_STRING("{} v{}"), Version::PROJECT, Version::NAME);
+}
 
 extern "C" DLLEXPORT bool SKSEAPI SKSEPlugin_Load(const SKSE::LoadInterface* a_skse)
 {
+	InitializeLog();
+
 	logger::info("loaded");
 
 	SKSE::Init(a_skse);
 
 	Setting::Load();
 
-	auto messaging = SKSE::GetMessagingInterface();
-	if (!messaging->RegisterListener("SKSE", OnInit)) {
-		return false;
-	}
+	SKSE::GetMessagingInterface()->RegisterListener(OnInit);
 
 	return true;
 }
