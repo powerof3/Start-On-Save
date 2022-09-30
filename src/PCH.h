@@ -1,5 +1,7 @@
 #pragma once
 
+#include <ranges>
+
 #include "RE/Skyrim.h"
 #include "SKSE/SKSE.h"
 
