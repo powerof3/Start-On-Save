@@ -5,8 +5,6 @@
 #include "RE/Skyrim.h"
 #include "SKSE/SKSE.h"
 
-#pragma warning(disable: 4100)
-
 #pragma warning(push)
 #ifdef NDEBUG
 #	include <spdlog/sinks/basic_file_sink.h>

@@ -22,7 +22,7 @@ public:
 	    return skipLoading;
 	}
 
-	bool GetValidSave(const RE::BSFixedString& a_name, std::int32_t a_offset = 0) const
+    [[nodiscard]] bool GetValidSave(const RE::BSFixedString& a_name, std::int32_t a_offset = 0) const
     {
 		return type == (0 + a_offset) ||
 		       type == (1 + a_offset) && string::icontains(a_name, "Quicksave") ||
