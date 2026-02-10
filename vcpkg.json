@@ -1,14 +1,14 @@
 {
   "name": "startonsave",
-  "version-string": "2.6.0",
+  "version-string": "2.7.0",
   "description": "",
   "homepage": "",
   "license": "MIT",
   "dependencies": [
-    "boost-stl-interfaces",
+    "clib-util",
     "rsm-binary-io",
     "spdlog",
-    "simpleini",
     "xbyak"
-  ]
+  ],
+  "builtin-baseline": "14bb451131ccf6be50a63a8d9dfe7980e46b5958"
 }

@@ -8,32 +8,28 @@ namespace StartOnSave
 		static void BuildSaveGameList(RE::BGSSaveLoadManager* a_manager)
 		{
 			using func_t = decltype(&BuildSaveGameList);
-			REL::Relocation<func_t> func{ RELOCATION_ID(34850, 35760) };
-			return func(a_manager);
+			static REL::Relocation<func_t> func{ RELOCATION_ID(34850, 35760) };
+			func(a_manager);
 		}
 
 		static void DoBeforeNewOrLoad()
 		{
 			using func_t = decltype(&DoBeforeNewOrLoad);
-			REL::Relocation<func_t> func{ RELOCATION_ID(35596, 36604) };
-			return func();
+			static REL::Relocation<func_t> func{ RELOCATION_ID(35596, 36604) };
+			func();
 		}
 
 		static void StartNewGame()
 		{
 			using func_t = decltype(&StartNewGame);
-			REL::Relocation<func_t> func{ RELOCATION_ID(51246, 52118) };
-			return func();
+			static REL::Relocation<func_t> func{ RELOCATION_ID(51246, 52118) };
+			func();
 		}
 	};
 
 	MenuManager::EventResult MenuManager::ProcessEvent(const RE::MenuOpenCloseEvent* a_event, RE::BSTEventSource<RE::MenuOpenCloseEvent>*)
 	{
-		if (!a_event) {
-			return EventResult::kContinue;
-		}
-
-		if (a_event->menuName != RE::LoadWaitSpinner::MENU_NAME) {
+		if (!a_event || a_event->menuName != RE::LoadWaitSpinner::MENU_NAME) {
 			return EventResult::kContinue;
 		}
 
@@ -70,7 +66,7 @@ namespace StartOnSave
 			if (!lastGame) {
 				const auto get_valid_save = [&](RE::BGSSaveLoadFileEntry* a_save, std::int32_t a_offset = 0) {
 					if (a_save && settings->GetValidSave(a_save->fileName, a_offset)) {
-						if (!settings->useCharName || string::iequals(a_save->playerName, settings->charName)) {
+						if (!settings->useCharName || string::iequals(a_save->characterName, settings->charName)) {
 							lastGame = a_save;
 							return true;
 						}
