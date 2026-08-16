@@ -3,7 +3,25 @@
 
 void OnInit(SKSE::MessagingInterface::Message* a_msg)
 {
-	if (a_msg->type == SKSE::MessagingInterface::kInputLoaded) {
+	// TWO FIXES, both needed. Either alone leaves the plugin broken on a heavy load order.
+	//
+	// 1. LoadSettings() was never called anywhere in v2.7.0 -- grep the tree, it is defined in
+	//    Settings.h and referenced nowhere. Every option therefore ran at its compile-time
+	//    default and po3_StartOnSave.ini was decorative: "Save File" and "Character Name" were
+	//    ignored (useSpecificSave/useCharName stay false, so EVERY save qualifies), the skip
+	//    hotkey stayed VK_SHIFT, and -- the dangerous one -- startNewGame stayed TRUE, so an
+	//    empty save list would start a new game regardless of the ini saying otherwise.
+	//
+	// 2. Registering the menu sink at kInputLoaded assumes the next LoadWaitSpinner is the main
+	//    menu. That holds on a light load order, where kDataLoaded follows almost immediately.
+	//    On a heavy one it does not: measured on a 385-mod build, kInputLoaded lands at +31s,
+	//    LoadWaitSpinner ~1.5s later, and kDataLoaded not for another ~30s. The sink therefore
+	//    fired on the INITIAL loading screen and drove the save load before the game was ready,
+	//    faulting in the engine every single launch. Registering at kDataLoaded removes the
+	//    assumption. Worst case becomes "does not autoload, parks at the main menu", which is a
+	//    loud, harmless failure instead of a crash.
+	if (a_msg->type == SKSE::MessagingInterface::kDataLoaded) {
+		Settings::GetSingleton()->LoadSettings();
 		Settings::GetSingleton()->CheckKeyPress();
 		StartOnSave::MenuManager::Register();
 	}
