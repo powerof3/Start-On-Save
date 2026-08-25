@@ -3,7 +3,7 @@
 namespace StartOnSave
 {
 	class MenuManager :
-		public REX ::Singleton<MenuManager>,
+		public REX::TSingleton<MenuManager>,
 		public RE::BSTEventSink<RE::MenuOpenCloseEvent>
 	{
 	public:

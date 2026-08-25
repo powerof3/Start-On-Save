@@ -56,7 +56,7 @@ namespace StartOnSave
 
 			if (settings->useSpecificSave) {
 				if (const auto result = std::ranges::find_if(list, [&](const auto& save) {
-						return settings->specificSave == save->fileName.c_str();
+						return settings->specificSave.GetValue() == save->fileName.c_str();
 					});
 					result != list.end()) {
 					lastGame = *result;
@@ -66,7 +66,7 @@ namespace StartOnSave
 			if (!lastGame) {
 				const auto get_valid_save = [&](RE::BGSSaveLoadFileEntry* a_save, std::int32_t a_offset = 0) {
 					if (a_save && settings->GetValidSave(a_save->fileName, a_offset)) {
-						if (!settings->useCharName || string::iequals(a_save->characterName, settings->charName)) {
+						if (!settings->useCharName || REX::STR::IEQUALS(a_save->characterName, settings->charName.GetValue())) {
 							lastGame = a_save;
 							return true;
 						}

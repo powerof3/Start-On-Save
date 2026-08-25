@@ -1,27 +1,90 @@
 #pragma once
 
-class Settings : public REX::Singleton<Settings>
+#include <SimpleIni.h>
+#undef ERROR
+
+class Settings : public REX::TSingleton<Settings>
 {
 public:
+	template <class T>
+	class Setting : public REX::TIniSetting<T>
+	{
+	public:
+		Setting(std::string_view a_section, std::string_view a_oldKey, std::string_view a_newKey, T a_default) :
+			REX::TIniSetting<T>(a_section, a_newKey, a_default),
+			oldKey(a_oldKey),
+			newKey(a_newKey)
+		{
+			GetSettingsToUpdate().emplace_back(a_section, a_oldKey, a_newKey);
+		}
+
+	private:
+		std::string_view newKey;
+		std::string_view oldKey;
+	};
+
+	using Bool = Setting<bool>;
+	using F32 = Setting<float>;
+	using F64 = Setting<double>;
+	using I8 = Setting<std::int8_t>;
+	using I16 = Setting<std::int16_t>;
+	using I32 = Setting<std::int32_t>;
+	using U8 = Setting<std::uint8_t>;
+	using U16 = Setting<std::uint16_t>;
+	using U32 = Setting<std::uint32_t>;
+	using Str = Setting<std::string>;
+
+	struct SettingsToUpdate
+	{
+		std::string_view section;
+		std::string_view oldKey;
+		std::string_view newKey;
+	};
+
 	void LoadSettings()
 	{
-		constexpr auto path = L"Data/SKSE/Plugins/po3_StartOnSave.ini";
+		std::error_code ec;
+		if (!std::filesystem::exists(path, ec)) {
+			CSimpleIniA ini;
+			ini.LoadFile(path);
+			(void)ini.SaveFile(path);
+		} else {
+			UpdateINISettings();
+		}
+		
+		const auto store = REX::FIniSettingStore::GetSingleton();
+		store->Init(path, "");
+		store->Load();
 
+		useSpecificSave = !specificSave.GetValue().empty();
+		useCharName = !charName.GetValue().empty();
+
+		store->Save();
+	}
+
+	void UpdateINISettings()
+	{
 		CSimpleIniA ini;
 		ini.SetUnicode();
 
-		ini.LoadFile(path);
+		if (ini.LoadFile(path) < SI_OK) {
+			return;
+		}
 
-		ini::get_value(ini, specificSave, "Settings", "Save File", ";Auto load specific save. If blank, the last save will be loaded");
-		useSpecificSave = !specificSave.empty();
+		if (ini.GetValue("Settings", "sSaveFile")) {
+			REX::INFO("No settings to migrate...");
+			return;
+		}
 
-		ini::get_value(ini, charName, "Settings", "Character Name", ";Auto load saves belonging to this character only. If blank, all saves will be considered.");
-		useCharName = !charName.empty();
-
-		ini::get_value(ini, type, "Settings", "Save Type", ";Type of save to auto load\n;0 - Last save (any), 1 - Last quicksave, 2 - Last autosave, 3 - Last manual save.\n;4 - First save (any), 5 - First quicksave, 6 - First autosave, 7 - First manual save");
-		ini::get_value(ini, KEY, "Settings", "Skip AutoLoad Hotkey", ";Skip autoload by pressing this key (default: SHIFT) before the main menu loads.\n;List of keycodes - https://www.indigorose.com/webhelp/ams/Program_Reference/Misc/Virtual_Key_Codes.htm");
-		ini::get_value(ini, startNewGame, "Settings", "Start New Game", ";Automatically start a new game if there are no saves.");
-		ini::get_value(ini, disableWarning, "Settings", "Disable Missing Content Warning", ";Disable warning messagebox when loading saves with missing mods.");
+		for (auto& [section, oldKey, newKey] : GetSettingsToUpdate()) {
+			CSimpleIniA::TNamesDepend values;
+			if (ini.GetAllValues(section.data(), oldKey.data(), values) && !values.empty()) {
+				const auto& entry = values.front();
+				ini.SetValue(section.data(), newKey.data(), entry.pItem, entry.pComment);
+				ini.Delete(section.data(), oldKey.data(), true);
+				REX::INFO("Migrated [{}] {} -> {}", section, oldKey, newKey);
+			}
+		}
 
 		(void)ini.SaveFile(path);
 	}
@@ -32,7 +95,7 @@ public:
 			return true;
 		}
 
-		if (GetAsyncKeyState(KEY) & 0x8000) {
+		if (GetAsyncKeyState(KEY.GetValue()) & 0x8000) {
 			skipLoading = true;
 		}
 
@@ -41,20 +104,30 @@ public:
 
 	[[nodiscard]] bool GetValidSave(const RE::BSFixedString& a_name, std::int32_t a_offset = 0) const
 	{
-		return type == (0 + a_offset) ||
-		       type == (1 + a_offset) && string::icontains(a_name, "Quicksave") ||
-		       type == (2 + a_offset) && string::icontains(a_name, "Autosave") ||
-		       type == (3 + a_offset) && string::icontains(a_name, "Save");
+		const auto t = type.GetValue();
+		return t == (0 + a_offset) ||
+		       t == (1 + a_offset) && REX::STR::ICONTAINS(a_name, "Quicksave") ||
+		       t == (2 + a_offset) && REX::STR::ICONTAINS(a_name, "Autosave") ||
+		       t == (3 + a_offset) && REX::STR::ICONTAINS(a_name, "Save");
 	}
 
+	static std::vector<SettingsToUpdate>& GetSettingsToUpdate()
+	{
+		static std::vector<SettingsToUpdate> settingsToUpdate;
+		return settingsToUpdate;
+	};
+
 	// members
-	std::string  specificSave{};
-	std::string  charName{};
-	std::int32_t type{ 0 };
-	int          KEY{ 16 };
-	bool         useCharName{};
-	bool         useSpecificSave{ false };
-	bool         disableWarning{ false };
-	bool         skipLoading{ false };
-	bool         startNewGame{ true };
+	static constexpr auto path = R"(Data\SKSE\Plugins\po3_StartOnSave.ini)";
+
+	Str  specificSave{ "Settings", "Save File", "sSaveFile", "" };
+	Str  charName{ "Settings", "Character Name", "sCharacterName", "" };
+	I32  type{ "Settings", "Save Type", "iSaveType", 0 };
+	I32  KEY{ "Settings", "Skip AutoLoad Hotkey", "bSkipAutoLoadHotkey", 16 };
+	Bool startNewGame{ "Settings", "Start New Game", "bStartNewGame", true };
+	Bool disableWarning{ "Settings", "Disable Missing Content Warning", "bDisableMissingContentWarning", false };
+
+	bool useCharName{ false };
+	bool useSpecificSave{ false };
+	bool skipLoading{ false };
 };
