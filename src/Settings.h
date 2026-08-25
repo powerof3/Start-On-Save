@@ -11,16 +11,10 @@ public:
 	{
 	public:
 		Setting(std::string_view a_section, std::string_view a_oldKey, std::string_view a_newKey, T a_default) :
-			REX::TIniSetting<T>(a_section, a_newKey, a_default),
-			oldKey(a_oldKey),
-			newKey(a_newKey)
+			REX::TIniSetting<T>(a_section, a_newKey, a_default)
 		{
 			GetSettingsToUpdate().emplace_back(a_section, a_oldKey, a_newKey);
 		}
-
-	private:
-		std::string_view newKey;
-		std::string_view oldKey;
 	};
 
 	using Bool = Setting<bool>;
@@ -108,7 +102,7 @@ public:
 		return t == (0 + a_offset) ||
 		       t == (1 + a_offset) && REX::STR::ICONTAINS(a_name, "Quicksave") ||
 		       t == (2 + a_offset) && REX::STR::ICONTAINS(a_name, "Autosave") ||
-		       t == (3 + a_offset) && REX::STR::ICONTAINS(a_name, "Save");
+		       t == (3 + a_offset) && !REX::STR::ICONTAINS(a_name, "Quicksave") && !REX::STR::ICONTAINS(a_name, "Autosave");
 	}
 
 	static std::vector<SettingsToUpdate>& GetSettingsToUpdate()
@@ -123,7 +117,7 @@ public:
 	Str  specificSave{ "Settings", "Save File", "sSaveFile", "" };
 	Str  charName{ "Settings", "Character Name", "sCharacterName", "" };
 	I32  type{ "Settings", "Save Type", "iSaveType", 0 };
-	I32  KEY{ "Settings", "Skip AutoLoad Hotkey", "bSkipAutoLoadHotkey", 16 };
+	I32  KEY{ "Settings", "Skip AutoLoad Hotkey", "iSkipAutoLoadHotkey", 16 };
 	Bool startNewGame{ "Settings", "Start New Game", "bStartNewGame", true };
 	Bool disableWarning{ "Settings", "Disable Missing Content Warning", "bDisableMissingContentWarning", false };
 
