@@ -38,11 +38,7 @@ public:
 	void LoadSettings()
 	{
 		std::error_code ec;
-		if (!std::filesystem::exists(path, ec)) {
-			CSimpleIniA ini;
-			ini.LoadFile(path);
-			(void)ini.SaveFile(path);
-		} else {
+		if (std::filesystem::exists(path, ec)) {
 			UpdateINISettings();
 		}
 		

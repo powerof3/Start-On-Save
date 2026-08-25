@@ -74,7 +74,7 @@ namespace StartOnSave
 					return false;
 				};
 
-			    if (settings->type < 4) {
+			    if (settings->type.GetValue() < 4) {
 					for (auto& save : list | std::views::reverse) { // the most recent save is stored at back
 						if (get_valid_save(save)) {
 							break;
